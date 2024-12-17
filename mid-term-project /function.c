@@ -6,39 +6,35 @@
 void read_students_file(const char *filename, Student students[], int *num_students) {
     FILE *file = fopen(filename, "r");
     if (!file) {
-        perror("Error opening student file");
+        perror("Error opening students file");
         exit(EXIT_FAILURE);
     }
 
-    char line[256]; // Assuming each line is less than 256 characters
-    *num_students = 0;
-
-    printf("Reading students file...\n");
+    char line[256];
     while (fgets(line, sizeof(line), file)) {
-        printf("Line read: %s\n", line);
-
         // Extract name
         strncpy(students[*num_students].name, line, 20);
-        students[*num_students].name[20] = '\0'; // Null-terminate the string
-        printf("Name: %s\n", students[*num_students].name);
+        students[*num_students].name[20] = '\0'; // Null-terminate
 
         // Extract TC number
-        strncpy(students[*num_students].tc_number, line + 20, 12);
-        students[*num_students].tc_number[12] = '\0'; // Null-terminate the string
-        printf("TC Number: %s\n", students[*num_students].tc_number);
+        strncpy(students[*num_students].tc_number, line + 20, 11);
+        students[*num_students].tc_number[12] = '\0'; // Null-terminate
 
         // Extract ID number
-        strncpy(students[*num_students].id_number, line + 32, 9);
-        students[*num_students].id_number[9] = '\0'; // Null-terminate the string
-        printf("ID Number: %s\n", students[*num_students].id_number);
+        strncpy(students[*num_students].id_number, line + 31, 9);
+        students[*num_students].id_number[9] = '\0'; // Null-terminate
 
         // Extract booklet type
         students[*num_students].booklet_type = line[41];
-        printf("Booklet Type: %c\n", students[*num_students].booklet_type);
 
         // Extract answers (starting from index 42)
-        strncpy(students[*num_students].answers, line + 42, MAX_QUESTIONS);
+        strncpy(students[*num_students].answers, line + 41, MAX_QUESTIONS);
         students[*num_students].answers[MAX_QUESTIONS] = '\0'; // Null-terminate
+
+        printf("Name: %s\n", students[*num_students].name);
+        printf("TC Number: %s\n", students[*num_students].tc_number);
+        printf("ID Number: %s\n", students[*num_students].id_number);
+        printf("Booklet Type: %c\n", students[*num_students].booklet_type);
         printf("Answers: %s\n", students[*num_students].answers);
 
         (*num_students)++;
@@ -83,7 +79,7 @@ void calculate_grades(Student students[], int num_students, char answer_keys[4][
         }
 
         // Scale the score
-        students[i].score = correct_answers * 102 / MAX_QUESTIONS; // 102 is the max score
+        students[i].score = correct_answers * 100 / MAX_QUESTIONS; // 102 is the max score
         printf("Student %d Score: %d\n", i + 1, students[i].score);
     }
 }
@@ -95,8 +91,13 @@ void write_grades_file(const char *filename, Student students[], int num_student
         exit(EXIT_FAILURE);
     }
 
+    // Write table header
+    fprintf(file, "%-20s %-12s %-9s %-10s %-6s\n", "Name", "TC Number", "ID Number", "Booklet", "Score");
+    fprintf(file, "%-20s %-12s %-9s %-10s %-6s\n", "--------------------", "------------", "---------", "----------", "-----");
+
+    // Write student data
     for (int i = 0; i < num_students; i++) {
-        fprintf(file, "%s %s %s %c %d\n",
+        fprintf(file, "%-20s %-12.12s %-9.9s %-10c %-6d\n",
                 students[i].name,
                 students[i].tc_number,
                 students[i].id_number,
