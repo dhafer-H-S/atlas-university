@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/darkarc/atlas-university/computer_systems/w1'
+relocations:     []
+...
