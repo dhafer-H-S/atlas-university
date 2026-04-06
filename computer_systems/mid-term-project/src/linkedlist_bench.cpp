@@ -15,6 +15,24 @@ struct alignas(64) Node {
     char  pad[64 - sizeof(Node*)];
 };
 
+// __attribute__((noinline)) prevents the compiler from inlining this function
+// and collapsing the pointer-chasing dependency chain at -O2.
+// The asm volatile("" ::: "memory") inside the loop is a *compiler* memory
+// barrier: it tells the compiler that this inline-assembly statement may
+// read or write ANY memory location, so the p->next load cannot be hoisted,
+// reordered, or eliminated.  It emits zero actual CPU instructions.
+__attribute__((noinline))
+static Node* chase_nodes(Node* start, size_t n_nodes, long long passes) {
+    Node* p = start;
+    for (long long pass = 0; pass < passes; ++pass) {
+        for (size_t i = 0; i < n_nodes; ++i) {
+            p = p->next;
+            asm volatile("" ::: "memory"); // compiler barrier — prevents loop collapse
+        }
+    }
+    return p;
+}
+
 void run_linkedlist_bench(const std::string& output_dir) {
     std::cout << "\n=== Experiment 4: Linked-List Pointer Chasing ===\n";
     std::cout << "  Node size: 64 bytes (1 cache line) | Sweep 4 KB -> 256 MB\n\n";
@@ -54,13 +72,11 @@ void run_linkedlist_bench(const std::string& output_dir) {
 
         volatile Node* local_sink = &nodes[order[0]];
         double ns = measure_ns([&]() {
-            Node* p = const_cast<Node*>(local_sink);
-            for (long long pass = 0; pass < passes; ++pass) {
-                for (size_t i = 0; i < n_nodes; ++i) {
-                    p = p->next;
-                }
-            }
-            local_sink = p;
+            // Call non-inlined chaser — prevents compiler from collapsing
+            // the load-use dependency chain that serialises each hop.
+            Node* result = chase_nodes(
+                const_cast<Node*>(local_sink), n_nodes, passes);
+            local_sink = result;
         }, static_cast<long long>(n_nodes) * passes, BENCH_ITERS);
 
         sink = local_sink;
