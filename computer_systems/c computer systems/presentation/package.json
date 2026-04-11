@@ -1,0 +1,12 @@
+{
+  "name": "c-cache-lab-pptx",
+  "version": "1.0.0",
+  "description": "PPTX generator for Cache & Locality Performance Lab (C11)",
+  "main": "make_pptx.js",
+  "scripts": {
+    "build": "node make_pptx.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}
