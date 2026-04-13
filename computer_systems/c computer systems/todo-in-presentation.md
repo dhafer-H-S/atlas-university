@@ -4,6 +4,8 @@ Audience: teachers evaluating technical understanding, measurement rigor, and in
 
 Use this as a speaking checklist during rehearsal.
 
+Common point with the course topics: this project is a direct application of what we studied, because every benchmark is built from nested loops that control access order, dynamic memory allocation (`malloc`/`calloc`) that creates test arrays and buffers of different sizes, and pointer-based structures (linked lists) that expose latency behavior when access is dependent; in short, we did not only learn syntax, we used loops + heap allocation + linked-list traversal to measure real hardware effects (cache locality, bandwidth, and DRAM latency) and convert them into engineering rules.
+
 ## Slide 1 — Title: Cache & Locality Performance Lab
 - [ ] Introduce the project goal in one sentence: show how memory access patterns change performance on real hardware.
 - [ ] Identify course context: Computer Systems mid-term, Team 11.
@@ -89,3 +91,38 @@ Use this as a speaking checklist during rehearsal.
 - [ ] Avoid only reading numbers; always explain mechanism.
 - [ ] Be ready to justify measurement reliability (best-of-5, normalization, anti-optimization guards).
 - [ ] Be ready for teacher questions on architecture differences (Apple Silicon vs x86).
+
+## Ready Speaking Script (One Paragraph Per Slide)
+
+### Slide 1 Script
+In this project, our goal is to show that memory access pattern changes performance on real hardware, even when the code looks similar at a high level. This is part of our Computer Systems mid-term work as Team 11. The memory hierarchy in the figure explains the core idea: as we move from registers to L1, L2, L3/SLC, and then DRAM, latency increases. So our talk is evidence-based: we measured these effects with controlled C benchmarks, not only with theory.
+
+### Slide 2 Script
+Our presentation follows a scientific flow: first methodology, then five experiments, then final findings. Each experiment isolates one variable, such as stride, working-set size, traversal order, pointer chasing, or kernel type. Our deliverables are reproducible C code, CSV outputs, and generated plots. We also clarify that these numbers are platform-specific for Apple Silicon, and we compare interpretation with common x86 expectations where relevant.
+
+### Slide 3 Script
+For methodology, we use `clock_gettime(CLOCK_MONOTONIC)` and normalize results to ns/access or ns/hop so different problem sizes remain comparable. We use best-of-5 iterations to reduce OS noise and keep the latency floor. To prevent misleading compiler optimizations, we use volatile sinks, noinline in dependency-sensitive code, and a compiler barrier in pointer chasing. This gives us confidence that plotted values represent memory behavior, not measurement artifacts.
+
+### Slide 4 Script (Stride)
+In the stride experiment, we scan a large array while increasing stride from 4 bytes up to 4096 bytes. The result is clear: latency is very low around 0.87 to 0.90 ns/access for 4 to 64 B stride, then jumps strongly at 128 B to about 2.98 ns/access, and peaks around 256 B near 3.67 ns/access. This means contiguous access is favored, while skipping larger gaps wastes cache-line locality. The graph shape also suggests prefetch effects on Apple Silicon, so the curve is not a perfect monotonic textbook step.
+
+### Slide 5 Script (Working Set)
+In the working-set experiment, we keep sequential access and only increase array size from 1 KB to 256 MB. Instead of dramatic steps, latency stays almost flat around 1.00 ns/access. Our interpretation is that strong prefetching and this memory system hide much of the expected cache-transition penalty for sequential scans. So the key message is not that caches do not matter, but that access pattern can dominate what we observe.
+
+### Slide 6 Script (Matrix)
+This experiment compares row-major-friendly loops against column-major-like strided loops on C row-major matrices. Row-major access stays near about 1.93 to 2.03 ns/access, while column-major rises to around 2.84 to 3.16 ns/access. The slowdown ratio is about 1.46 to 1.56x for larger sizes, which is significant but below worst-case theoretical ratios because hardware prefetch partially helps. The practical rule is simple: align inner loops with contiguous memory layout.
+
+### Slide 7 Script (Linked List)
+The linked-list benchmark is random pointer chasing with 64-byte aligned nodes, so each hop depends on the previous load and locality is intentionally poor. At small sizes, latency is around 0.65 ns/hop, but it grows to about 2.60 ns/hop at 256 KB, around 6 to 9.5 ns/hop in MB ranges, then jumps dramatically to about 37 ns at 32 MB and up to roughly 83 ns/hop at 256 MB. This is a direct demonstration of latency-dominated dependent loads and why prefetch cannot fully solve random pointer chains.
+
+### Slide 8 Script (Bandwidth)
+In the bandwidth experiment, we compare copy and sum kernels. Copy reaches very high throughput, roughly above 100 GB/s at large sizes and up to around 250 GB/s at small sizes, while sum stays much lower and flatter around 17 to 27 GB/s. The reason is bottleneck type: copy is mainly bandwidth-driven, but sum has loop-carried dependency that limits throughput. So high memory bandwidth alone does not guarantee high performance for all kernels.
+
+### Slide 9 Script (Dashboard)
+Across all plots, one thesis is consistent: access pattern matters as much as data size. Stride shows locality loss when spacing grows, working set shows sequential robustness on this platform, matrix shows loop-order penalty, linked list shows dependency-driven latency explosion, and copy-vs-sum shows that dependency can dominate even when bandwidth is high. The dashboard is not just many graphs; it is one coherent performance story.
+
+### Slide 10 Script (Five Rules)
+We convert evidence into engineering actions. Rule 1: cache-line granularity is real, so align and pack hot data carefully. Rule 2: sequential scans are favored here, so prefer linear traversal when possible. Rule 3: row-major loops matter in C, so set inner loops to contiguous dimensions. Rule 4: pointer chasing is expensive, so use array-based or blocked layouts when possible. Rule 5: dependency chains cap throughput, so use multiple accumulators and dependency-breaking strategies in reductions.
+
+### Slide 11 Script (Conclusion and Q&A)
+To conclude, this project applies course fundamentals, loops, dynamic allocation (`malloc` and `calloc`), and linked structures, to measure real cache and memory behavior and derive practical optimization rules. Our limitations are honest: one platform, one compiler setup, and mostly microbenchmarks. Future work is to repeat on x86, vary compiler flags, and add cache-blocked kernels. We are ready for questions on methodology, architecture differences, and interpretation of each graph.

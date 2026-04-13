@@ -1,0 +1,249 @@
+# Explination: Course Topics, Experiments, and Graph Analysis
+
+## 0) Quick Memory Hierarchy (L1, L2, L3, DRAM)
+
+- L1 cache:
+  Smallest and fastest cache, very close to CPU cores. Stores the hottest data and instructions.
+
+- L2 cache:
+  Larger than L1, a bit slower, still very fast. Acts as backup when data is not in L1.
+
+- L3 cache:
+  Larger shared cache (in many systems), slower than L2 but much faster than DRAM. Helps reduce expensive main-memory accesses.
+
+- DRAM (main memory / RAM):
+  Largest and slowest among these levels. Used when data is not found in caches.
+
+Simple idea: as you go from L1 -> L2 -> L3 -> DRAM, capacity increases but latency also increases.
+
+Text diagram:
+
+CPU Core
+  -> L1 (very fast, very small)
+  -> L2 (fast, small-medium)
+  -> L3 (medium speed, larger)
+  -> DRAM (slowest, largest)
+
+Mermaid diagram:
+
+```mermaid
+flowchart TD
+    A[CPU Core] --> B[L1 Cache\nFastest, smallest]
+    B --> C[L2 Cache\nFast, larger]
+    C --> D[L3 Cache\nLarger, slower]
+    D --> E[DRAM\nLargest, slowest]
+```
+
+## 1) Common Points Between What We Studied and This Project
+
+This project is a practical extension of the core C topics we studied in class:
+
+- Loops (`for`, nested loops):
+  We use loops in every benchmark to control memory access order and repetition count. The loop shape directly changes performance.
+
+- Dynamic memory (`malloc`, `calloc`, `free`):
+  We allocate arrays and buffers of many sizes to move data across L1, L2, L3, and DRAM ranges. This lets us measure how memory hierarchy affects latency and throughput.
+
+- Linked lists and pointers:
+  Pointer chasing in linked lists is used to show dependent memory access, where each next address is unknown until the current node is loaded.
+
+- Data structures + hardware behavior:
+  The same algorithmic idea can run at very different speed depending on locality, cache-line use, and dependency chains.
+
+Main common idea:
+We did not just learn syntax. We used loops, heap allocation, and linked structures to measure real machine behavior and derive optimization rules.
+
+---
+
+## 2) The Core 4 Experiments in This Project
+
+The 4 core locality experiments are:
+
+1. Stride Access Pattern
+2. Working Set Size
+3. Matrix Traversal Order (Row-major vs Column-major)
+4. Linked-list Pointer Chasing
+
+There is also a 5th experiment as an extension:
+
+5. Memory Bandwidth (Copy vs Sum)
+
+---
+
+## 3) Experiment-by-Experiment Explanation With Graph Interpretation
+
+## Experiment 1: Stride Access Pattern
+- Purpose:
+  Measure how increasing stride distance hurts spatial locality.
+
+- What code does:
+  Scan a large array while changing step size (stride) from small to large.
+
+- Graph file:
+  `results/figures/stride.png`
+
+- Key measured pattern:
+  - 4 to 64 B stride: about 0.87 to 0.90 ns/access (very fast)
+  - 128 B stride: about 2.98 ns/access (big jump)
+  - 256 B stride: about 3.67 ns/access (peak region)
+
+- Interpretation:
+  Small stride reuses fetched cache lines well. Larger stride wastes cache-line data and increases effective miss cost. Prefetch behavior on Apple Silicon smooths some regions, so the curve is not perfectly monotonic.
+
+- Engineering takeaway:
+  Prefer contiguous access and avoid unnecessary sparse stepping.
+
+## Experiment 2: Working Set Size
+- Purpose:
+  Test latency as total array size grows from very small to very large.
+
+- What code does:
+  Sequentially scan arrays from 1 KB up to 256 MB and report ns/access.
+
+- Graph file:
+  `results/figures/workingset.png`
+
+- Key measured pattern:
+  Latency stays near-flat around ~1.00 ns/access across almost all sizes.
+
+- Interpretation:
+  For sequential access on this platform, prefetching and memory subsystem efficiency hide much of expected cache-transition penalty. This does not mean cache is irrelevant; it means access order is very favorable.
+
+- Engineering takeaway:
+  Linear scans are highly optimized by hardware and often robust across size ranges.
+
+## Experiment 3: Matrix Traversal Order (Row-major vs Column-major)
+- Purpose:
+  Show that loop order matters in C row-major memory layout.
+
+- What code does:
+  Compare:
+  - Row-major friendly loop (`i` outer, `j` inner)
+  - Column-major-like loop (`j` outer, `i` inner)
+
+- Graph file:
+  `results/figures/matrix.png`
+
+- Key measured pattern:
+  - Row-major: about 1.93 to 2.03 ns/access
+  - Column-major: about 2.84 to 3.16 ns/access
+  - Slowdown ratio: about 1.46 to 1.56x for larger N
+
+- Interpretation:
+  Row-major access is contiguous and cache-friendly. Column-major access becomes strided and less cache-efficient. Prefetch helps a bit, so slowdown is significant but not extreme worst-case.
+
+- Engineering takeaway:
+  Align inner loop with contiguous memory dimension.
+
+## Experiment 4: Linked-list Pointer Chasing
+- Purpose:
+  Expose latency of dependent random accesses.
+
+- What code does:
+  Build shuffled linked list with 64-byte nodes, then follow next pointers repeatedly.
+
+- Graph file:
+  `results/figures/linkedlist.png`
+
+- Key measured pattern:
+  - Small lists: ~0.65 ns/hop
+  - Around 256 KB: ~2.60 ns/hop
+  - Around 2 MB: ~6.17 ns/hop
+  - Around 32 MB: ~37 ns/hop
+  - Up to 256 MB: ~83 ns/hop
+
+- Interpretation:
+  This is latency-dominated behavior. Each load depends on the previous node address, so hardware prefetch has limited ability to hide misses. As footprint grows beyond cache, hop cost rises sharply.
+
+- Engineering takeaway:
+  Random pointer-heavy structures can be much slower than array-based traversal.
+
+---
+
+## 4) Extension Experiment: Memory Bandwidth (Copy vs Sum)
+
+- Purpose:
+  Compare a high-throughput kernel (copy) with a dependency-limited kernel (sum reduction).
+
+- What code does:
+  - Copy kernel: read + write streaming
+  - Sum kernel: loop-carried dependency in accumulation
+
+- Graph file:
+  `results/figures/bandwidth.png`
+
+- Key measured pattern:
+  - Copy: high bandwidth (about 100+ GB/s at large sizes, up to ~250+ GB/s at small sizes)
+  - Sum: much lower and flatter (~17 to 27 GB/s)
+
+- Interpretation:
+  Copy is bandwidth-oriented and benefits from streaming. Sum is limited by dependency chain and instruction throughput behavior.
+
+- Engineering takeaway:
+  High memory bandwidth alone does not guarantee high performance for dependency-heavy kernels.
+
+---
+
+## 5) One-paragraph Summary for Teachers
+
+This project directly connects our course topics to real system performance: loops determine access order, `malloc`/`calloc` create memory footprints that cross cache levels, and linked-list pointer chasing demonstrates dependency-limited latency. The experiments show a consistent message: contiguous and layout-aware access is fast, while strided or dependent random access becomes expensive, especially outside cache. The graphs provide measured evidence that coding style and data structure choice are hardware-level decisions, not only software style preferences.
+
+---
+
+## 6) Concept Section: What Is Stride?
+
+- Definition:
+  Stride is the distance in memory between two consecutive accesses inside a loop.
+
+- In array terms:
+  If each `int` is 4 bytes:
+  - stride = 1 element means 4-byte jump each step
+  - stride = 2 elements means 8-byte jump each step
+  - stride = 16 elements means 64-byte jump each step
+
+- Why this is important for cache:
+  CPUs fetch memory in cache lines (typically 64 bytes). With small stride, one fetched line contains many useful next values. With large stride, you touch fewer useful bytes per line, so effective latency per useful access rises.
+
+- Connection to your graph:
+  In `results/figures/stride.png`, latency stays low for small strides and rises strongly when stride grows beyond cache-line-friendly behavior. This is the direct signature of spatial-locality loss.
+
+- Practical coding rule:
+  Keep loops memory-contiguous when possible; avoid wide jumps unless algorithmically necessary.
+
+## 7) Concept Section: What Is Linked-list Pointer Chasing?
+
+- Definition:
+  Pointer chasing means traversing nodes by repeatedly loading `next` pointers (`p = p->next`).
+
+- Why it is different from arrays:
+  For arrays, next address is predictable (`base + i * size`). For linked lists, next address is data-dependent and only known after current node is fetched.
+
+- Why performance drops:
+  Each load depends on the previous load result, so memory-level parallelism is limited. Randomized node order also defeats spatial locality and weakens prefetch effectiveness.
+
+- Connection to your graph:
+  In `results/figures/linkedlist.png`, ns/hop is very low when the list fits in cache, then grows sharply as size moves to larger cache levels and DRAM. This is expected latency-dominated dependent-load behavior.
+
+- Practical coding rule:
+  For performance-critical paths, contiguous arrays or blocked structures are usually faster than random pointer-heavy chains.
+
+## 8) Concept Section: What Is Memory Bandwidth?
+
+- Definition:
+  Memory bandwidth is the amount of data transferred per unit time between compute cores and memory hierarchy.
+
+- Formula:
+  Bandwidth = data moved / elapsed time.
+
+- Units:
+  Usually GB/s.
+
+- Difference from latency:
+  - Latency asks: how long one access takes.
+  - Bandwidth asks: how much total data per second can be sustained.
+
+- Connection to your graph:
+  In `results/figures/bandwidth.png`, copy reaches much higher GB/s than sum because copy streams independent operations, while sum has a loop-carried dependency chain in accumulation.
+
+- Practical coding rule:
+  Achieving peak bandwidth requires both good memory access pattern and low dependency constraints; high hardware bandwidth alone is not enough.
